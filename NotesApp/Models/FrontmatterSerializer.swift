@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Parsed result of reading a note file pulled from the repo.
@@ -21,6 +22,16 @@ struct ParsedFrontmatter {
 /// this app emits plus the common shapes in existing notes. It does not parse
 /// arbitrary YAML (block scalars, nested maps, etc.).
 enum FrontmatterSerializer {
+    // MARK: - Hashing
+
+    /// Stable SHA-256 hex digest of a string. Used to compare a note's current
+    /// content against its last-synced baseline across launches.
+    static func contentHash(of content: String) -> String {
+        SHA256.hash(data: Data(content.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
     // MARK: - Dates & slugs
 
     private static let dateFormatter: DateFormatter = {

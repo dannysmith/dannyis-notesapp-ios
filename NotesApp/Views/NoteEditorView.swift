@@ -9,6 +9,7 @@ struct NoteEditorView: View {
     @State private var tagsText: String = ""
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var pendingAction: EditorAction?
     /// The slug value this view last auto-generated. While the current slug
     /// matches it, we keep syncing from the title; once the user edits or
     /// clears the slug, it diverges and we stop.
@@ -75,31 +76,29 @@ struct NoteEditorView: View {
             }
 
             Section {
-                Button {
-                    saveLocal()
-                } label: {
-                    Label("Save locally", systemImage: "tray.and.arrow.down")
+                ForEach(primaryActions) { action in
+                    actionButton(action)
                 }
-
-                Button {
-                    push(asDraft: true)
-                } label: {
-                    Label("Push as draft", systemImage: "arrow.up.doc")
-                }
-
-                Button {
-                    push(asDraft: false)
-                } label: {
-                    Label(note.syncState == .published ? "Update published note" : "Publish", systemImage: "paperplane")
-                }
-                .tint(.green)
             }
             .disabled(isWorking || note.title.isEmpty)
+
+            if note.hasUnpushedChanges {
+                Section {
+                    Button {
+                        trigger(.reloadFromGitHub)
+                    } label: {
+                        Label("Reload from GitHub", systemImage: "arrow.down.circle")
+                    }
+                    .disabled(isWorking)
+                } footer: {
+                    Text("Replaces your local edits with the current version on GitHub.")
+                }
+            }
 
             if note.remotePath != nil {
                 Section {
                     Button(role: .destructive) {
-                        remoteDelete()
+                        trigger(.deleteRemote)
                     } label: {
                         Label("Delete from GitHub", systemImage: "trash")
                     }
@@ -121,12 +120,93 @@ struct NoteEditorView: View {
             tagsText = note.tags.joined(separator: ", ")
             lastAutoSlug = note.customSlug ?? ""
         }
+        .onDisappear {
+            // Edits auto-persist, but force a save when leaving for safety.
+            try? modelContext.save()
+        }
+        .confirmationDialog(
+            confirmationTitle,
+            isPresented: confirmationPresented,
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
+            if let confirm = style(for: action).confirm {
+                Button(confirm.button, role: confirm.destructive ? .destructive : nil) {
+                    execute(action)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { action in
+            Text(style(for: action).confirm?.message ?? "")
+        }
         .alert("Something went wrong", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
         }
     }
+
+    // MARK: - Actions
+
+    /// The two primary buttons shown for the note's current state.
+    private var primaryActions: [EditorAction] {
+        switch note.syncState {
+        case .localOnly: [.pushDraft, .publish]
+        case .draft: [.updateDraft, .publish]
+        case .published: [.updatePublished, .revertToDraft]
+        }
+    }
+
+    @ViewBuilder
+    private func actionButton(_ action: EditorAction) -> some View {
+        let style = style(for: action)
+        Button {
+            trigger(action)
+        } label: {
+            Label(style.label, systemImage: style.icon)
+        }
+        .tint(style.tint)
+    }
+
+    /// Either prompt for confirmation or run the action immediately.
+    private func trigger(_ action: EditorAction) {
+        if style(for: action).confirm != nil {
+            pendingAction = action
+        } else {
+            execute(action)
+        }
+    }
+
+    private func execute(_ action: EditorAction) {
+        switch action {
+        case .pushDraft, .updateDraft, .revertToDraft:
+            push(asDraft: true)
+        case .publish, .updatePublished:
+            push(asDraft: false)
+        case .reloadFromGitHub:
+            reload()
+        case .deleteRemote:
+            remoteDelete()
+        }
+    }
+
+    private var confirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingAction != nil },
+            set: { if !$0 { pendingAction = nil } }
+        )
+    }
+
+    private var confirmationTitle: String {
+        pendingAction.flatMap { style(for: $0).confirm?.title } ?? ""
+    }
+
+    /// Styling + confirmation copy for an action (see `NoteEditorActions`).
+    private func style(for action: EditorAction) -> ActionStyle {
+        actionStyle(for: action, syncState: note.syncState)
+    }
+
+    // MARK: - Slug
 
     /// Auto-fills the slug from the title for notes not yet pushed, until the
     /// user takes over the slug field. Never touches the slug of a note that
@@ -140,11 +220,7 @@ struct NoteEditorView: View {
         lastAutoSlug = generated
     }
 
-    private func saveLocal() {
-        note.updatedAt = Date()
-        try? modelContext.save()
-        dismiss()
-    }
+    // MARK: - Networking
 
     private func push(asDraft: Bool) {
         isWorking = true
@@ -164,9 +240,39 @@ struct NoteEditorView: View {
                 )
                 note.remotePath = response.content?.path ?? path
                 note.remoteSha = response.content?.sha
+                note.markSynced()
                 note.updatedAt = Date()
                 try? modelContext.save()
                 dismiss()
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    /// Replaces local content with the current version on GitHub.
+    private func reload() {
+        guard let path = note.remotePath else { return }
+        isWorking = true
+        Task {
+            defer { isWorking = false }
+            do {
+                let (text, sha) = try await client.fetchFile(path: path)
+                let parsed = FrontmatterSerializer.parse(text)
+                note.title = parsed.title
+                note.body = parsed.body
+                note.sourceURL = parsed.sourceURL
+                note.customSlug = parsed.customSlug
+                note.tags = parsed.tags
+                note.noteDescription = parsed.description
+                if let pubDate = parsed.pubDate { note.pubDate = pubDate }
+                note.draftFlag = parsed.draft
+                note.remoteSha = sha
+                note.markSynced()
+                note.updatedAt = Date()
+                tagsText = note.tags.joined(separator: ", ")
+                lastAutoSlug = note.customSlug ?? ""
+                try? modelContext.save()
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
@@ -186,69 +292,6 @@ struct NoteEditorView: View {
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
-        }
-    }
-}
-
-/// Prominent status banner shown at the top of the editor: where this note
-/// currently lives (this device / draft on GitHub / published).
-private struct NoteStatusHeader: View {
-    let note: Note
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(color)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var filename: String {
-        let path = note.remotePath ?? note.resolvedPath
-        return path.split(separator: "/").last.map(String.init) ?? path
-    }
-
-    private var icon: String {
-        switch note.syncState {
-        case .localOnly: "iphone"
-        case .draft: "doc.badge.ellipsis"
-        case .published: "checkmark.seal.fill"
-        }
-    }
-
-    private var color: Color {
-        switch note.syncState {
-        case .localOnly: .secondary
-        case .draft: .orange
-        case .published: .green
-        }
-    }
-
-    private var title: String {
-        switch note.syncState {
-        case .localOnly: "Local draft"
-        case .draft: "Draft on GitHub"
-        case .published: "Published"
-        }
-    }
-
-    private var detail: String {
-        switch note.syncState {
-        case .localOnly: "Only on this device · \(filename)"
-        case .draft: "On \(AppConfig.branch) · \(filename)"
-        case .published: "On \(AppConfig.branch) · \(filename)"
         }
     }
 }

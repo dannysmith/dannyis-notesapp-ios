@@ -125,6 +125,7 @@ struct NoteListView: View {
                     )
                     note.remotePath = entry.path
                     note.remoteSha = entry.sha
+                    note.markSynced()
                     modelContext.insert(note)
                 }
             } catch {
@@ -174,6 +175,11 @@ private struct NoteRow: View {
                 .lineLimit(1)
             HStack(spacing: 8) {
                 SyncBadge(state: note.syncState)
+                if note.hasUnpushedChanges {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 if let url = note.sourceURL, !url.isEmpty {
                     Image(systemName: "link")
                         .font(.caption2)

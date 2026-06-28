@@ -31,6 +31,9 @@ final class Note {
     var remotePath: String?
     /// The current blob SHA of the remote file, required to update it.
     var remoteSha: String?
+    /// Hash of this note's serialized content at the last successful push or
+    /// pull. Used to detect local edits that haven't been sent to GitHub.
+    var syncedContentHash: String?
 
     init(
         title: String = "",
@@ -58,6 +61,24 @@ final class Note {
     var syncState: SyncState {
         guard remotePath != nil else { return .localOnly }
         return draftFlag ? .draft : .published
+    }
+
+    /// Hash of the note's content as it would be serialized right now.
+    var currentContentHash: String {
+        FrontmatterSerializer.contentHash(of: FrontmatterSerializer.serialize(self))
+    }
+
+    /// True when a GitHub-backed note has local edits not yet pushed.
+    /// Local-only notes are never "diverged" — they're entirely unpushed by nature.
+    var hasUnpushedChanges: Bool {
+        guard remotePath != nil else { return false }
+        return currentContentHash != syncedContentHash
+    }
+
+    /// Records the current content as the synced baseline. Call after a
+    /// successful push or pull so divergence is measured from here.
+    func markSynced() {
+        syncedContentHash = currentContentHash
     }
 
     /// Slug used for the filename: custom slug if set, otherwise derived from title.

@@ -15,6 +15,11 @@ disabled_rules:
   # SwiftUI view bodies are legitimately long; SwiftFormat owns layout.
   - function_body_length
 
+# SwiftUI views (form + actions + networking) run longer than the default.
+type_body_length:
+  warning: 300
+  error: 400
+
 line_length:
   warning: 140
   error: 200
