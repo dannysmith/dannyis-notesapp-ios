@@ -20,8 +20,8 @@ struct NoteStatusHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if note.hasUnpushedChanges {
-                    Label("Local changes not pushed", systemImage: "pencil.circle.fill")
-                        .font(.caption2.weight(.medium))
+                    Text("Local changes not pushed")
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.orange)
                 }
             }
