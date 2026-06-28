@@ -1,0 +1,10 @@
+# SwiftFormat configuration — https://github.com/nicklockwood/SwiftFormat
+--swiftversion 6.0
+
+# Sensible explicit choices on top of SwiftFormat's defaults
+--self remove
+--importgrouping alpha
+--trailingclosures
+--commas inline
+
+--exclude DerivedData,.build,NotesApp.xcodeproj
