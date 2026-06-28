@@ -127,8 +127,7 @@ The body field should support normal markdown editing features (ideally GFM) - t
 
 - [x] Built a custom `UITextView`-backed source editor (`MarkdownEditor`, `UIViewRepresentable`) — **no dependency**, text kept verbatim (raw markdown + MDX/JSX preserved), smart quotes/dashes off, grows to fit inside the Form.
 - [x] Keyboard accessory **formatting toolbar**: Bold (`**`), Italic (`_`), Link (`[text](url)`, pre-fills URL from clipboard if present), Heading (cycles current line `#`→`##`→`###`→none), and Done. All operate on the current selection.
-- [ ] (Deferred) Live syntax highlighting — add later as an overlay-only pass (or adopt Runestone, MIT) if desired. Considered candidates: Runestone (best fit, dependency), HighlightedTextEditor (simple but stale 2022), STTextView (GPL-3.0).
-- [ ] (Deferred) Optional read-only rendered preview pane — Textual or LiYanan2004/MarkdownView if wanted (note: neither renders MDX faithfully).
+- [x] Live syntax highlighting (`MarkdownSyntaxHighlighter`) — regex-based, overlay-only (mutates the `UITextView`'s `NSTextStorage` *attributes*, never the characters), no dependency. Restyles the whole (short) document on each edit; skips IME composition. Styles: bold/italic content with dimmed markers, headings bold at body size with dimmed `#`, blockquotes dimmed + italic, dimmed list markers, dimmed link brackets/URL (text kept normal), and inline + fenced code in monospace with a subtle background. Font traits are merged (bold-inside-heading etc.). Known limits: it's not a full parser — `_italic_` is reliable, single-`*` italic is best-effort, and deeply nested/escaped cases may mis-style (text always stays correct). Could swap in Runestone (MIT) later if scope grows.
 
 ### 5. SourceURL Preview
 
@@ -139,12 +138,14 @@ It'd be awesome if when a sourceURL is present we can show a nice preview of it 
 - [ ] Grab URL + selected text from share source → prefill `sourceURL` + body. (This is the original motivation.)
 - [ ] Consider how we could handle other types of share
   - [ ] text only > blockquote
-  - [ ] image > upload to assets dir with appropriate rename etc
-- [ ] 
+  - [ ] image > upload to assets dir with appropriate rename?
 
 ### 7. Cleaning up
 
 - [ ] Unit tests for the serializer and anything else.
+- [ ] Any cleanup or refactoring we can do in the codebase
+- [ ] Add AGENTS.md etc.
+- [ ] Make README proper.
 - [x] Code linting tools like swiftlint and format etc?
 
 ## Known limitations

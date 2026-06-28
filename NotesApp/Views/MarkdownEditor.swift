@@ -24,11 +24,14 @@ struct MarkdownEditor: UIViewRepresentable {
         // Source text: keep punctuation literal and predictable.
         textView.smartQuotesType = .no
         textView.smartDashesType = .no
-        // Grow to fit content inside the surrounding SwiftUI Form.
+        // Grow to fit content inside the surrounding SwiftUI Form, and wrap to
+        // the available width instead of demanding the full single-line width.
         textView.isScrollEnabled = false
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textView.inputAccessoryView = context.coordinator.makeToolbar()
         textView.text = text
         context.coordinator.textView = textView
+        MarkdownSyntaxHighlighter.highlight(textView)
         return textView
     }
 
@@ -38,6 +41,7 @@ struct MarkdownEditor: UIViewRepresentable {
         // stomp the cursor on every keystroke.
         if textView.text != text {
             textView.text = text
+            MarkdownSyntaxHighlighter.highlight(textView)
         }
     }
 
@@ -52,6 +56,9 @@ struct MarkdownEditor: UIViewRepresentable {
 
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
+            // Skip while composing (IME marked text) to avoid disrupting input.
+            guard textView.markedTextRange == nil else { return }
+            MarkdownSyntaxHighlighter.highlight(textView)
         }
 
         // MARK: - Toolbar
