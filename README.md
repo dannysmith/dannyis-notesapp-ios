@@ -123,6 +123,13 @@ PAT auth, list/pull/create/edit/publish/delete notes direct to `main`. Builds cl
 
 The body field should support normal markdown editing features (ideally GFM) - there must be an implementation of this we could reuse or use as a reference.
 
+**Research conclusion:** iOS 26's native rich-text `TextEditor(AttributedString)` is a trap here — Apple offers markdown *import* but no *export*, so a WYSIWYG editor would lose raw markdown/MDX and can't be made verbatim. Third-party WYSIWYG/rendering libs (MarkupEditor, MarkdownUI/Textual, etc.) are likewise unsuitable as the editor (rendering libs are only good for an optional read-only preview). The correct shape is a **plain-text source editor** where the `String` is the source of truth, optionally with overlaid syntax highlighting.
+
+- [x] Built a custom `UITextView`-backed source editor (`MarkdownEditor`, `UIViewRepresentable`) — **no dependency**, text kept verbatim (raw markdown + MDX/JSX preserved), smart quotes/dashes off, grows to fit inside the Form.
+- [x] Keyboard accessory **formatting toolbar**: Bold (`**`), Italic (`_`), Link (`[text](url)`, pre-fills URL from clipboard if present), Heading (cycles current line `#`→`##`→`###`→none), and Done. All operate on the current selection.
+- [ ] (Deferred) Live syntax highlighting — add later as an overlay-only pass (or adopt Runestone, MIT) if desired. Considered candidates: Runestone (best fit, dependency), HighlightedTextEditor (simple but stale 2022), STTextView (GPL-3.0).
+- [ ] (Deferred) Optional read-only rendered preview pane — Textual or LiYanan2004/MarkdownView if wanted (note: neither renders MDX faithfully).
+
 ### 5. SourceURL Preview
 
 It'd be awesome if when a sourceURL is present we can show a nice preview of it with it's OG image, title, URL etc. We should only do this if we can grab that info. I wonder if there is a library or reference implementation for this anywhere sine it feels like a common thing to want to do.

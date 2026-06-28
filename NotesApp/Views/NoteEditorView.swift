@@ -29,9 +29,8 @@ struct NoteEditorView: View {
             }
 
             Section("Body") {
-                TextField("Write your note…", text: $note.body, axis: .vertical)
-                    .lineLimit(6...)
-                    .font(.system(.body, design: .serif))
+                MarkdownEditor(text: $note.body)
+                    .frame(minHeight: 220)
             }
 
             Section("Metadata") {
