@@ -3,6 +3,7 @@ import SwiftUI
 
 struct NoteListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Note.updatedAt, order: .reverse) private var notes: [Note]
 
     @State private var showingSettings = false
@@ -75,6 +76,12 @@ struct NoteListView: View {
                 Button("OK") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Flush any pending local edits before the app is suspended/killed.
+            if phase != .active {
+                try? modelContext.save()
             }
         }
     }

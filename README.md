@@ -116,8 +116,8 @@ PAT auth, list/pull/create/edit/publish/delete notes direct to `main`. Builds cl
   - [x] For Drafts on GH we should show "Update draft on GitHub" and "Publish on GitHub". For Published notes on GH we should show "Revert to draft on GH" and "Update published note on GH". All actions which will change or create a published note should have a confirmation.
 
 ### 3. Resiliance and Safety
-- [ ] Conflict handling on `sha` mismatch (remote changed since pull)
-- [ ] Ensure any local drafts/changs are properly saved locally if the app is suddenly closed or navgated away from.
+- [x] Conflict handling on `sha` mismatch (remote changed since pull) — a push that hits a 409 (remote moved since last sync) now shows a "Note changed on GitHub" alert offering **Keep my version** (fetch latest SHA, force-push local over it) or **Use GitHub version** (reload, discarding local edits).
+- [x] Ensure any local drafts/changes are properly saved locally if the app is suddenly closed or navigated away from. — Edits bind straight to SwiftData (autosave); plus an explicit save on leaving the editor (`onDisappear`) and on the app leaving the foreground (`scenePhase` ≠ `.active`).
 
 ### 4. Markdown Editor
 
@@ -143,5 +143,5 @@ It'd be awesome if when a sourceURL is present we can show a nice preview of it 
 ## Known limitations
 
 - The frontmatter parser handles flat single-line fields (what this app emits + common existing notes); it does not parse arbitrary YAML (block scalars, nested maps). Fine for round-tripping our own files.
-- No conflict detection yet: if a note is edited on GitHub after being pulled, an in-app edit will fail the `sha` check (GitHub returns 409) — surfaced as an error, not auto-merged.
+- Conflicts are detected but not auto-merged: if a note is edited on GitHub after being pulled, a push hits a 409 and the app prompts you to keep your version (force-push) or take the GitHub version (reload). It does not merge the two.
 - `.mdx` notes containing JSX components will round-trip as plain text (body preserved verbatim), which is correct, but the editor has no MDX awareness.

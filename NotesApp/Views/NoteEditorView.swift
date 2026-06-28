@@ -10,6 +10,7 @@ struct NoteEditorView: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
     @State private var pendingAction: EditorAction?
+    @State private var showConflict = false
     /// The slug value this view last auto-generated. While the current slug
     /// matches it, we keep syncing from the title; once the user edits or
     /// clears the slug, it diverges and we stop.
@@ -144,6 +145,15 @@ struct NoteEditorView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .alert("Note changed on GitHub", isPresented: $showConflict) {
+            Button("Keep my version") { forcePush() }
+            Button("Use GitHub version", role: .destructive) { reload() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This note was edited on GitHub since you last synced. " +
+                "“Keep my version” overwrites GitHub with your local copy; " +
+                "“Use GitHub version” discards your local edits.")
+        }
     }
 
     // MARK: - Actions
@@ -239,6 +249,36 @@ struct NoteEditorView: View {
                     sha: note.remoteSha
                 )
                 note.remotePath = response.content?.path ?? path
+                note.remoteSha = response.content?.sha
+                note.markSynced()
+                note.updatedAt = Date()
+                try? modelContext.save()
+                dismiss()
+            } catch let GitHubError.http(status, _) where status == 409 {
+                // Remote moved since we last synced — let the user choose.
+                showConflict = true
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    /// Resolves a conflict by overwriting GitHub with the local version: fetch
+    /// the latest SHA, then re-push the current local content over it.
+    private func forcePush() {
+        guard let path = note.remotePath else { return }
+        isWorking = true
+        Task {
+            defer { isWorking = false }
+            do {
+                let (_, latestSha) = try await client.fetchFile(path: path)
+                let content = FrontmatterSerializer.serialize(note)
+                let response = try await client.putFile(
+                    path: path,
+                    content: content,
+                    message: "Update note: \(note.title)",
+                    sha: latestSha
+                )
                 note.remoteSha = response.content?.sha
                 note.markSynced()
                 note.updatedAt = Date()
