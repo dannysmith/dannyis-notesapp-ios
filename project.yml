@@ -24,6 +24,7 @@ targets:
     platform: iOS
     sources:
       - path: NotesApp
+      - path: Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: is.danny.notesapp
@@ -35,6 +36,13 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES
         # Allow the SwiftLint build phase to read the source tree.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+    entitlements:
+      path: NotesApp/NotesApp.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.is.danny.notesapp
+    dependencies:
+      - target: ShareExtension
     preBuildScripts:
       - name: SwiftLint
         basedOnDependencyAnalysis: false
@@ -47,3 +55,21 @@ targets:
           else
             echo "warning: SwiftLint not installed — run 'brew install swiftlint'"
           fi
+
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: is.danny.notesapp.ShareExtension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        SWIFT_EMIT_LOC_STRINGS: YES
+    entitlements:
+      path: ShareExtension/ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.is.danny.notesapp

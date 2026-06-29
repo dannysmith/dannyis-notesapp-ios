@@ -141,10 +141,14 @@ It'd be awesome if when a sourceURL is present we can show a nice preview of it 
 
 ### 6. Share Extension target
 
-- [ ] Grab URL + selected text from share source → prefill `sourceURL` + body. (This is the original motivation.)
-- [ ] Consider how we could handle other types of share
-  - [ ] text only > blockquote
-  - [ ] image > upload to assets dir with appropriate rename?
+**Architecture:** A self-contained Share Extension (Apple's recommended model — it does NOT launch the app; `UIApplication.shared`/`NSExtensionContext.open` can't open the containing app from a share extension anyway). It captures content into a JSON "inbox" in a shared **App Group** container (`group.is.danny.notesapp`); the app drains the inbox into local-draft notes on launch/foreground. The two targets share only `Shared/SharedInbox.swift` (compiled into both) — no shared SwiftData store, which avoids cross-process Core Data pitfalls.
+
+- [x] Grab URL + selected text from share source → prefill `sourceURL` + body. (The original motivation.) Safari typically provides both the page URL and any selection, so you get `sourceURL` + a blockquoted body in one go.
+- [x] Quick compose sheet (`ShareComposeView`): shows the captured URL + an editable body, Save Draft / Cancel. Dismisses back to the host app; the draft is waiting in the app.
+- [x] text only → blockquote (`> ` per line); URL only → `sourceURL` with empty body.
+- [ ] ~~image → upload to assets dir~~ — deliberately skipped (too much complexity for now).
+
+**Required Xcode setup (once):** select your Team on the **ShareExtension** target, and confirm the **App Groups** capability (`group.is.danny.notesapp`) on *both* the app and the extension under Signing & Capabilities (automatic signing creates the group). Files: `ShareExtension/` (principal `ShareViewController`, `ShareComposeView`, `Info.plist`, entitlements) + `Shared/SharedInbox.swift`.
 
 ### 7. Cleaning up
 

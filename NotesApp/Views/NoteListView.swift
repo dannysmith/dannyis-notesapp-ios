@@ -79,17 +79,31 @@ struct NoteListView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Flush any pending local edits before the app is suspended/killed.
-            if phase != .active {
+            if phase == .active {
+                // Import anything captured by the Share Extension while away.
+                importSharedDrafts()
+            } else {
+                // Flush any pending local edits before the app is suspended/killed.
                 try? modelContext.save()
             }
         }
+        .onAppear { importSharedDrafts() }
     }
 
     private func deleteLocal(_ offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(notes[index])
         }
+    }
+
+    /// Turns any items the Share Extension queued into local-draft notes.
+    private func importSharedDrafts() {
+        let payloads = ShareInbox.drain()
+        guard !payloads.isEmpty else { return }
+        for payload in payloads {
+            modelContext.insert(Note(body: payload.body, sourceURL: payload.sourceURL))
+        }
+        try? modelContext.save()
     }
 
     /// Fetches every remote note, imports any not already tracked locally, and

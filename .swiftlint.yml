@@ -1,6 +1,8 @@
 # SwiftLint configuration — https://github.com/realm/SwiftLint
 included:
   - NotesApp
+  - Shared
+  - ShareExtension
 
 opt_in_rules:
   - empty_count
