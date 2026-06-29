@@ -43,6 +43,10 @@ struct NoteEditorView: View {
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
 
+                if let sourceURL = note.sourceURL, !sourceURL.isEmpty {
+                    BookmarkCardView(urlString: sourceURL)
+                }
+
                 HStack {
                     TextField("Custom slug (optional)", text: Binding(
                         get: { note.customSlug ?? "" },

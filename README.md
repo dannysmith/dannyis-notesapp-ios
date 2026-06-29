@@ -134,6 +134,11 @@ The body field should support normal markdown editing features (ideally GFM) - t
 
 It'd be awesome if when a sourceURL is present we can show a nice preview of it with it's OG image, title, URL etc. We should only do this if we can grab that info. I wonder if there is a library or reference implementation for this anywhere sine it feels like a common thing to want to do.
 
+- [x] Built `LinkMetadataService` — a Swift port of the site's own `fetchLinkMetadata.ts` (URLSession GET with a browser User-Agent + 10s timeout, regex-extracting `og:`/`twitter:`/`<title>`/`description`/`og:image` with the same precedence). No dependency; behaviour-parity with the site. Considered `LinkPresentation` (LPLinkView) but rejected it — it gives no description and an Apple-styled card that wouldn't resemble `BookmarkCard`.
+- [x] `BookmarkCardView` mirrors `BookmarkCard.astro`: image + accent title + 2-line description + monospace domain, tappable (opens the URL). Shown under the Source URL field when one is present.
+- [x] Graceful degradation: debounced fetch (so typing a URL doesn't spam requests), in-memory cache (no refetch on revisit), and a "Preview unavailable" fallback on any failure (bad URL / offline / non-200 / missing tags).
+- Note: every sourceURL gets the bookmark-style card — we deliberately do **not** replicate `Embed.astro`'s special handling (YouTube/tweets/etc. render as embeds on the real site). This is just to give a sense of the metadata, not a faithful render.
+
 ### 6. Share Extension target
 
 - [ ] Grab URL + selected text from share source → prefill `sourceURL` + body. (This is the original motivation.)
