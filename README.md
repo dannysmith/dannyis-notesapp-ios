@@ -1,166 +1,80 @@
-# iOS Notes App Experiment
+# Notes — iOS app for danny.is
 
-My website https://danny.is is an Astro site at https://github.com/dannysmith/dannyis-astro (available locally at `~/dev/dannyis-astro`). It has two primary content collections, notes and articles. The site is statically built using a GitHub action and then deployed to Vercel, So it can be deployed anywhere because it just produces static files. My workflow for publishing articles is to simply work on them usually against the main branch but with a draft flag set in the front matter which means they won't be published as part of the build. And I often do the same thing for notes. 
+A personal iOS app for writing, drafting, and publishing **notes** on [danny.is](https://danny.is) — the Astro site at [`dannysmith/dannyis-astro`](https://github.com/dannysmith/dannyis-astro). Notes are short thoughts and link-posts; this app lets me capture one from anywhere (especially via the share sheet), edit it in markdown, and publish straight to the site's GitHub repo.
 
-My notes are often short little individual thoughts and comments on things I've found on the internet (with a `sourceURL`). It would be great if I had a mobile app where I could create draft notes, especially one which supports share sheet sharing. So if I'm on a website I think is cool, I can create a note from it. And I would also like to be able to publish those notes directly from the iOS app. 
+Single-user, native **SwiftUI** (iOS 17+).
 
-Now it seems to me the best way of doing this would be to build a very simple editing interface that used the GitHub API and allowed me to create and edit new notes only in the GH repo. However, the more complicated thing here is the challenge about how we should commit these. Should these be on separate branches etc. Because if I'm actually publishing a note then I think it's that's just gonna be its own commit, right? I guess an option here would be that I can have drafts in the GitHub repo. But there's like another type of draft that is just in the data of the mobile app that hasn't actually been "uploaded" yet.
+## The core idea: no Git on the device
 
-Anyway, this is an app that is only going to be used by me. But it would be interesting to explore possibilities here. 
+The app never clones or pushes a repo. Every change is **one file, one commit** through the GitHub **Contents API** — a single authenticated HTTP request. So the "backend" is just `URLSession` + JSON: no libgit2, no working copy, no merge logic.
 
----
+A note maps to one markdown file in `src/content/notes/`. The app reads and writes the **literal markdown verbatim** — including raw markdown and embedded MDX/JSX — and never normalizes it.
 
-# Decisions, Research & Architecture
+## What it does
 
-This section records what we decided and why, the research that informed it, and how the app is built. It's the source of truth for the project.
+- **Write notes** in a markdown source editor with live syntax highlighting, a formatting toolbar (bold / italic / link / heading), and a full-screen mode.
+- **Three states**, mirroring the by-hand workflow on the site:
+  - **Local draft** — lives only on the device (SwiftData), never pushed.
+  - **Draft on GitHub** — committed to `main` with `draft: true` (excluded from the production build).
+  - **Published** — committed to `main` with `draft: false` (live on next deploy).
+- **Auto-save everywhere** — local edits persist instantly; GitHub-backed notes clearly show when they have local changes not yet pushed, with a "reload from GitHub" escape hatch.
+- **Conflict handling** — if a note changed on GitHub since you synced, a push prompts you to keep your version or take theirs.
+- **Source URL preview** — a bookmark-style card (OG title / description / image), mirroring the site's `BookmarkCard.astro`.
+- **Share Extension** — share a URL and/or selected text (e.g. from Safari) → a draft with `sourceURL`, a blockquoted body, and a title pulled from the page's metadata.
 
-## The key insight: no Git on the device
+## How it works
 
-The instinct ("it's a GitHub repo, so I need git/clone/commit/push on iOS") is wrong for this use case. We only ever touch **one file per change**, and GitHub's **Contents API** does exactly that in a single authenticated HTTP request:
+- **Auth:** a fine-grained GitHub Personal Access Token, scoped to `dannyis-astro` (Contents: read & write), stored in the Keychain. Set it in Settings. (A PAT is the right tool for a single-user app; OAuth exists to avoid shipping secrets to *many* users, which doesn't apply.)
+- **Commit model:** direct commits to `main`, controlled by the frontmatter `draft` flag. No branches or PRs — "Publish" just flips `draft: true` → `false`.
+- **Divergence tracking:** each note stores a hash of its content as last pushed/pulled; "has local changes" is a comparison against that baseline.
+- **Share handoff:** the extension writes a JSON payload to a shared **App Group** container; the app imports it into a draft on launch/foreground. (No shared SwiftData store — that avoids cross-process Core Data pitfalls.)
 
-```
-PUT /repos/dannysmith/dannyis-astro/contents/src/content/notes/<file>.md
-{ "message": "...", "content": "<base64>", "branch": "main", "sha": "<only when editing>" }
-```
-
-- Create a new file → omit `sha`, returns `201`.
-- Edit an existing file → include its current blob `sha` (one `GET` to fetch it), returns `200`.
-- There's a matching `DELETE`. Limit is 1 MB/file (irrelevant for text notes).
-
-So the entire "backend" is `URLSession` + JSON. No libgit2, no clone, no working copy, no merge logic. This is what makes native Swift/SwiftUI almost trivial here — the hard part doesn't exist.
-
-## Decisions
-
-| Area | Decision | Why |
-|---|---|---|
-| **Platform** | Native Swift / SwiftUI, SwiftData for local storage | User has Xcode + Apple Developer account; the Contents API removes all git complexity |
-| **Auth** | Fine-grained Personal Access Token in the Keychain | Single-user app — OAuth/PKCE exists to avoid shipping secrets to *many untrusted users*, which doesn't apply. Scope the PAT to `dannyis-astro` only, Contents: read & write. Revocable, rotatable. (OAuth+PKCE is the upgrade path if this ever ships to others — GitHub added PKCE support July 2025.) |
-| **Commit model** | Direct commits to `main`, controlled by the frontmatter `draft` flag | Mirrors the existing by-hand workflow exactly. No branches/PRs. "Publish" = a Contents-API update flipping `draft: true` → `false`. |
-| **Three draft states** | Local-only (SwiftData, never pushed) → Repo draft (`draft: true` on main) → Published (`draft: false` on main) | Clean mapping of the "two kinds of draft" problem from the brief |
-
-## Research findings
-
-- **CI / formatting (important):** `.prettierignore` in the Astro repo ignores `*.md`, `*.mdx`, `*.yml`, `*.yaml` ("Content files — managed manually"). So **prettier never checks notes** — the serializer only has to satisfy the zod schema, not prettier formatting. The only remaining CI gate on a note commit is the vitest/playwright suite, which won't care about a new note unless a test counts/snapshots them (low risk; verify if a deploy ever fails).
-- **Build/deploy:** Push to `main` triggers `.github/workflows/deploy.yml` → runs `check:all` → builds → deploys to Vercel. A commit lands even if CI fails; it just won't deploy. No local pre-commit hooks. A post-deploy workflow syncs published (non-draft) posts to standard.site (AT Protocol).
-- **Auth landscape:** `ASWebAuthenticationSession` + authorization-code + PKCE is the documented "best practice" for *distributed* iOS apps; device flow is discouraged for mobile (phishing surface). For a personal tool, a scoped PAT is the appropriate choice, not a shortcut.
-
-## Notes content schema (from `src/content.config.ts`)
-
-Files live in `src/content/notes/`, named `YYYY-MM-DD-<slug>.md` (or `.mdx`). Frontmatter:
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `title` | string | **yes** | |
-| `pubDate` | date | **yes** | coerced; emitted as `YYYY-MM-DD` |
-| `sourceURL` | url | no | original URL for link posts |
-| `slug` | string | no | custom URL slug; defaults to filename |
-| `draft` | boolean | no | defaults `false`; `true` = excluded from production build |
-| `description` | string | no | |
-| `tags` | string[] | no | emitted as a flow array `["a", "b"]` |
-| `styleguide` | boolean | no | excluded from RSS/indexes (not used by this app) |
-
-## App architecture
+## Project structure
 
 ```
 NotesApp/
-  AppConfig.swift              # repo owner/name/branch/notesDir constants
-  NotesAppApp.swift            # @main, SwiftData ModelContainer
+  AppConfig.swift                 # repo owner / name / branch / notes dir
+  NotesAppApp.swift               # @main, SwiftData container
   Models/
-    Note.swift                 # @Model: local draft + cache of a remote note (remotePath/remoteSha)
-    FrontmatterSerializer.swift # serialize Note ↔ frontmatter+markdown; slug/date helpers; minimal parser
+    Note.swift                    # SwiftData model + sync-state / divergence logic
+    FrontmatterSerializer.swift   # Note ↔ frontmatter+markdown, slugs, hashing
   Networking/
-    GitHubClient.swift         # async URLSession wrapper over the Contents API
-    GitHubModels.swift         # Codable DTOs + GitHubError
-  Storage/
-    KeychainStore.swift        # the PAT, in the Keychain
-  Views/
-    NoteListView.swift         # list local+remote notes, "Pull from GitHub", new/settings
-    NoteEditorView.swift       # edit fields; Save locally / Push as draft / Publish / Delete
-    SettingsView.swift         # paste + validate the PAT
+    GitHubClient.swift            # async Contents API wrapper
+    GitHubModels.swift            # DTOs + errors
+    LinkMetadata.swift            # OG/Twitter metadata fetch + (pure) parse
+  Storage/KeychainStore.swift     # the PAT
+  Views/                          # list, editor, markdown editor + highlighter,
+                                  # bookmark card, status header, settings
+ShareExtension/                   # share target: capture → inbox
+Shared/                           # code shared by app + extension (inbox, formatting)
+Tests/                            # Swift Testing unit tests (pure logic, no network)
 ```
 
-Project is generated with **XcodeGen** from `project.yml` (not committed: `.xcodeproj`). Bundle id `is.danny.notesapp`, deployment target iOS 17 (SwiftData).
+The Xcode project is generated by **XcodeGen** from `project.yml` — the `.xcodeproj` is not committed.
 
 ## Build & run
 
+Prerequisites: Xcode 26+, and `brew install xcodegen swiftlint swiftformat`.
+
 ```sh
-xcodegen generate                 # regenerate NotesApp.xcodeproj from project.yml
-open NotesApp.xcodeproj            # then set your signing Team and run on device/sim
+xcodegen generate     # regenerate NotesApp.xcodeproj (run after adding/moving files)
+open NotesApp.xcodeproj
 ```
 
-First launch: tap the gear → paste a fine-grained PAT scoped to `dannyis-astro` (Contents: read & write) → Save & Validate. Then write a note and Push as draft / Publish. "Pull from GitHub" imports existing notes for editing.
+In Xcode, set your **Team** on both the `NotesApp` and `ShareExtension` targets, and confirm the **App Groups** capability (`group.is.danny.notesapp`) on both (Signing & Capabilities). Then run. On first launch, open Settings and paste a fine-grained PAT.
 
-## Tooling & conventions
+App Groups requires a paid Apple Developer account. Simulator runs don't need a provisioning profile.
 
-- **XcodeGen** (`project.yml`) is the source of truth for the Xcode project. The `.xcodeproj` is **not** committed — run `xcodegen generate` after cloning or whenever you add/move files. Deployment target is iOS 17 (the floor for SwiftData, Observation, and `ContentUnavailableView`); Swift 6 language mode.
-- **SwiftFormat** (`.swiftformat`) handles layout. Run `swiftformat .` before committing.
-- **SwiftLint** (`.swiftlint.yml`) handles style/correctness rules. It runs automatically as a pre-build phase in Xcode (warnings show inline), or run `swiftlint` manually. `ENABLE_USER_SCRIPT_SANDBOXING` is `NO` so the build phase can read the source tree.
-- Both tools are installed via Homebrew: `brew install swiftlint swiftformat`.
-- The repo is git-initialised on `main`. `.gitignore` covers Xcode/SPM artifacts, the generated `.xcodeproj`, and `.claude/settings.local.json`.
+## Testing & tooling
 
-## Roadmap
+```sh
+xcodebuild test -scheme NotesApp -destination 'platform=iOS Simulator,name=iPhone 17'   # unit tests
+swiftformat .       # format
+swiftlint           # lint (also runs as a build phase)
+```
 
-### 1. M1 (done)
+Tests (Swift Testing) cover the pure logic — serializer, slug generation, the `Note` state machine, OG-metadata parsing, and share formatting — with no network or GitHub access.
 
-PAT auth, list/pull/create/edit/publish/delete notes direct to `main`. Builds clean.
+## History & rationale
 
-### 2. Tweaks
-
-- [x] We should completely exclude any notes with `styleguide: true` (usually just the one)
-- [x] When creating new notes we should auto-generate the custom slug in a similar way to the filename but without the date prepended. We may also want to remove certain common filler words and limit its length?
-- [x] The custom slug field should be clearable with a clear button on the right - we should use whatever the iOS design standard for this is.
-- [x] The edit view should have the current status of a note shown clearly at the top
-- [x] The save buttons should work like this:
-  - [x] For a local-only draft we should have "Push draft to GitHub" and "Publish to GitHub". We should not need a "Save locally" button because we should be auto-persisting all changes to local drafts as they are made.
-  - [x] For ALL notes pushed to GitHub we should perhaps not be persisting changes locally as we type and require an explicit "Save changes locally" to be pressed and warn if we try to go back with unsaved changes. The other option here is auto-saving local changes and making sure we are extremely clear when a note on GH ALSO has local changes which have not been pushed. I actually think this second thing might be a better option. But there should be a way for me to easily in this case easily say hey get me the version of this note from GitHub and overwrite anything which I've changed locally. **→ Chose auto-save everywhere (no save button); GitHub-backed notes show a "Local changes not pushed" indicator (editor header + list row dot); "Reload from GitHub" discards local edits and re-fetches the remote version.**
-  - [x] For Drafts on GH we should show "Update draft on GitHub" and "Publish on GitHub". For Published notes on GH we should show "Revert to draft on GH" and "Update published note on GH". All actions which will change or create a published note should have a confirmation.
-
-### 3. Resiliance and Safety
-- [x] Conflict handling on `sha` mismatch (remote changed since pull) — a push that hits a 409 (remote moved since last sync) now shows a "Note changed on GitHub" alert offering **Keep my version** (fetch latest SHA, force-push local over it) or **Use GitHub version** (reload, discarding local edits).
-- [x] Ensure any local drafts/changes are properly saved locally if the app is suddenly closed or navigated away from. — Edits bind straight to SwiftData (autosave); plus an explicit save on leaving the editor (`onDisappear`) and on the app leaving the foreground (`scenePhase` ≠ `.active`).
-
-### 4. Markdown Editor
-
-The body field should support normal markdown editing features (ideally GFM) - there must be an implementation of this we could reuse or use as a reference.
-
-**Research conclusion:** iOS 26's native rich-text `TextEditor(AttributedString)` is a trap here — Apple offers markdown *import* but no *export*, so a WYSIWYG editor would lose raw markdown/MDX and can't be made verbatim. Third-party WYSIWYG/rendering libs (MarkupEditor, MarkdownUI/Textual, etc.) are likewise unsuitable as the editor (rendering libs are only good for an optional read-only preview). The correct shape is a **plain-text source editor** where the `String` is the source of truth, optionally with overlaid syntax highlighting.
-
-- [x] Built a custom `UITextView`-backed source editor (`MarkdownEditor`, `UIViewRepresentable`) — **no dependency**, text kept verbatim (raw markdown + MDX/JSX preserved), smart quotes/dashes off, grows to fit inside the Form.
-- [x] Keyboard accessory **formatting toolbar**: Bold (`**`), Italic (`_`), Link (`[text](url)`, pre-fills URL from clipboard if present), Heading (cycles current line `#`→`##`→`###`→none), and Done. All operate on the current selection.
-- [x] Live syntax highlighting (`MarkdownSyntaxHighlighter`) — regex-based, overlay-only (mutates the `UITextView`'s `NSTextStorage` *attributes*, never the characters), no dependency. Restyles the whole (short) document on each edit; skips IME composition. Styles: bold/italic content with dimmed markers, headings bold at body size with dimmed `#`, blockquotes dimmed + italic, dimmed list markers, dimmed link brackets/URL (text kept normal), and inline + fenced code in monospace with a subtle background. Font traits are merged (bold-inside-heading etc.). Known limits: it's not a full parser — `_italic_` is reliable, single-`*` italic is best-effort, and deeply nested/escaped cases may mis-style (text always stays correct). Could swap in Runestone (MIT) later if scope grows.
-- [x] Full-screen expand/collapse — an expand button in the keyboard toolbar opens the body in a `fullScreenCover` (slides up), reusing the *same* `MarkdownEditor` component bound to the same `$note.body`, so the toolbar, highlighting, and all editing behave identically. Auto-focuses on open (keyboard stays up); collapse via the toolbar button or "Done". Inline mode grows-to-fit (no scroll); expanded mode fills and scrolls. Not a literal box-morph (a true in-place `UITextView` reparent is fragile in SwiftUI) — the slide-up cover is the robust standard.
-
-### 5. SourceURL Preview
-
-It'd be awesome if when a sourceURL is present we can show a nice preview of it with it's OG image, title, URL etc. We should only do this if we can grab that info. I wonder if there is a library or reference implementation for this anywhere sine it feels like a common thing to want to do.
-
-- [x] Built `LinkMetadataService` — a Swift port of the site's own `fetchLinkMetadata.ts` (URLSession GET with a browser User-Agent + 10s timeout, regex-extracting `og:`/`twitter:`/`<title>`/`description`/`og:image` with the same precedence). No dependency; behaviour-parity with the site. Considered `LinkPresentation` (LPLinkView) but rejected it — it gives no description and an Apple-styled card that wouldn't resemble `BookmarkCard`.
-- [x] `BookmarkCardView` mirrors `BookmarkCard.astro`: image + accent title + 2-line description + monospace domain, tappable (opens the URL). Shown under the Source URL field when one is present.
-- [x] Graceful degradation: debounced fetch (so typing a URL doesn't spam requests), in-memory cache (no refetch on revisit), and a "Preview unavailable" fallback on any failure (bad URL / offline / non-200 / missing tags).
-- Note: every sourceURL gets the bookmark-style card — we deliberately do **not** replicate `Embed.astro`'s special handling (YouTube/tweets/etc. render as embeds on the real site). This is just to give a sense of the metadata, not a faithful render.
-
-### 6. Share Extension target
-
-**Architecture:** A self-contained Share Extension (Apple's recommended model — it does NOT launch the app; `UIApplication.shared`/`NSExtensionContext.open` can't open the containing app from a share extension anyway). It captures content into a JSON "inbox" in a shared **App Group** container (`group.is.danny.notesapp`); the app drains the inbox into local-draft notes on launch/foreground. The two targets share only `Shared/SharedInbox.swift` (compiled into both) — no shared SwiftData store, which avoids cross-process Core Data pitfalls.
-
-- [x] Grab URL + selected text from share source → prefill `sourceURL` + body. (The original motivation.) Safari typically provides both the page URL and any selection, so you get `sourceURL` + a blockquoted body in one go.
-- [x] Quick compose sheet (`ShareComposeView`): shows the captured URL + an editable body, Save Draft / Cancel. Dismisses back to the host app; the draft is waiting in the app.
-- [x] text only → blockquote (`> ` per line); URL only → `sourceURL` with empty body.
-- [x] Auto-fill the draft **title** from the source URL's metadata on import (reuses `LinkMetadataService` — the OG title *is* the page title), only when a real title is found (not the bare domain). Safari doesn't reliably hand the page title to an extension without a JavaScript preprocessing file, so we derive it app-side instead.
-- [ ] ~~image → upload to assets dir~~ — deliberately skipped (too much complexity for now).
-
-**Required Xcode setup (once):** select your Team on the **ShareExtension** target, and confirm the **App Groups** capability (`group.is.danny.notesapp`) on *both* the app and the extension under Signing & Capabilities (automatic signing creates the group). Files: `ShareExtension/` (principal `ShareViewController`, `ShareComposeView`, `Info.plist`, entitlements) + `Shared/SharedInbox.swift`.
-
-### 7. Cleaning up
-
-- [x] Unit tests (Swift Testing, in `Tests/`, target `NotesAppTests`): `FrontmatterSerializer` (slugs/serialize/parse/round-trip/dates/hash), `Note` state machine (`syncState`/`hasUnpushedChanges`/`resolvedPath`), `LinkMetadataService.parse` (OG extraction on sample HTML — no network), and `ShareFormatting.blockquote`. All pure logic, no GitHub/network. Run: `xcodebuild test -scheme NotesApp -destination 'platform=iOS Simulator,name=iPhone 17'` (or ⌘U in Xcode). Two small testability refactors enabled these: split `LinkMetadataService.fetch` into a pure `parse(html:url:)`, and moved `blockquote` into `Shared/ShareFormatting`.
-- [ ] Any cleanup or refactoring we can do in the codebase
-- [ ] Add AGENTS.md etc.
-- [ ] Make README proper.
-- [x] Code linting tools like swiftlint and format etc?
-
-## Known limitations
-
-- The frontmatter parser handles flat single-line fields (what this app emits + common existing notes); it does not parse arbitrary YAML (block scalars, nested maps). Fine for round-tripping our own files.
-- Conflicts are detected but not auto-merged: if a note is edited on GitHub after being pulled, a push hits a 409 and the app prompts you to keep your version (force-push) or take the GitHub version (reload). It does not merge the two.
-- `.mdx` notes containing JSX components will round-trip as plain text (body preserved verbatim), which is correct, but the editor has no MDX awareness.
+The full build log, alternatives considered, and design decisions live in [`docs/tasks-done/build-roadmap-and-decisions.md`](docs/tasks-done/build-roadmap-and-decisions.md).
