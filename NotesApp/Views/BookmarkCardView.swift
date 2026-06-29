@@ -11,7 +11,9 @@ struct BookmarkCardView: View {
     @State private var failed = false
 
     var body: some View {
-        Group {
+        // A concrete container (not Group) so `.task` always has a view to
+        // attach to — a Group with no children on first render never runs it.
+        VStack(alignment: .leading, spacing: 0) {
             if let metadata {
                 card(metadata)
             } else if isLoading {
@@ -22,6 +24,7 @@ struct BookmarkCardView: View {
                 fallback
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: urlString) { await load() }
     }
 
@@ -45,8 +48,10 @@ struct BookmarkCardView: View {
                 }
                 Spacer(minLength: 0)
                 if let imageURL = metadata.imageURL {
-                    AsyncImage(url: imageURL) { phase in
-                        (phase.image ?? Image(systemName: "")).resizable().aspectRatio(contentMode: .fill)
+                    AsyncImage(url: imageURL) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color(.secondarySystemFill)
                     }
                     .frame(width: 84, height: 60)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
