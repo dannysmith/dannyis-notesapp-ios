@@ -30,8 +30,20 @@ struct NoteListView: View {
                             } label: {
                                 NoteRow(note: note)
                             }
+                            // Only local-only drafts can be swiped away. Once a
+                            // note exists on GitHub, deleting it here would
+                            // silently drop the local copy while leaving the
+                            // remote file behind, so we don't offer it.
+                            .swipeActions(edge: .trailing) {
+                                if note.syncState == .localOnly {
+                                    Button(role: .destructive) {
+                                        modelContext.delete(note)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
                         }
-                        .onDelete(perform: deleteLocal)
                     }
                 }
             }
@@ -88,12 +100,6 @@ struct NoteListView: View {
             }
         }
         .onAppear { importSharedDrafts() }
-    }
-
-    private func deleteLocal(_ offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(notes[index])
-        }
     }
 
     /// Turns any items the Share Extension queued into local-draft notes, then
