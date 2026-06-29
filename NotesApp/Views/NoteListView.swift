@@ -47,16 +47,22 @@ struct NoteListView: View {
                     }
                 }
             }
-            .navigationTitle("Notes")
+            // Render the title ourselves, pinned just under the status bar, and
+            // hide the system navigation bar — otherwise its now-empty top row
+            // (all actions moved to the bottom bar) leaves a band of dead space
+            // above the title. navigationTitle stays for the editor's back label.
+            .navigationTitle("danny.is/notes")
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top) {
+                Text("danny.is/notes")
+                    .font(.largeTitle.weight(.bold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+            }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .bottomBar) {
                     Button {
                         let note = Note()
                         modelContext.insert(note)
@@ -64,8 +70,13 @@ struct NoteListView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
-                }
-                ToolbarItem(placement: .bottomBar) {
+                    // The primary action: a filled accent-colour button, the
+                    // OS-standard prominent style for primary actions.
+                    .buttonStyle(.borderedProminent)
+                    .tint(.accentColor)
+
+                    Spacer()
+
                     Button {
                         pull()
                     } label: {
@@ -76,6 +87,14 @@ struct NoteListView: View {
                         }
                     }
                     .disabled(isPulling)
+
+                    Spacer()
+
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
                 }
             }
             .sheet(isPresented: $showingSettings) {
