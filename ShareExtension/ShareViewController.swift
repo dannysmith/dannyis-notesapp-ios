@@ -12,7 +12,7 @@ final class ShareViewController: UIViewController {
 
     private func loadAndPresent() async {
         let (sourceURL, text) = await extractSharedContent()
-        let body = text.map(Self.blockquote) ?? ""
+        let body = text.map(ShareFormatting.blockquote) ?? ""
         let initial = SharePayload(sourceURL: sourceURL, body: body, createdAt: Date())
 
         let composeView = ShareComposeView(
@@ -71,13 +71,6 @@ final class ShareViewController: UIViewController {
                 continuation.resume(returning: item as? String)
             }
         }
-    }
-
-    /// Prefixes each line with `> ` to form a markdown blockquote.
-    private static func blockquote(_ text: String) -> String {
-        text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { "> \($0)" }
-            .joined(separator: "\n")
     }
 
     // MARK: - Completion

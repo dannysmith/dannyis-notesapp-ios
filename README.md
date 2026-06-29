@@ -153,7 +153,7 @@ It'd be awesome if when a sourceURL is present we can show a nice preview of it 
 
 ### 7. Cleaning up
 
-- [ ] Unit tests for the serializer and anything else.
+- [x] Unit tests (Swift Testing, in `Tests/`, target `NotesAppTests`): `FrontmatterSerializer` (slugs/serialize/parse/round-trip/dates/hash), `Note` state machine (`syncState`/`hasUnpushedChanges`/`resolvedPath`), `LinkMetadataService.parse` (OG extraction on sample HTML — no network), and `ShareFormatting.blockquote`. All pure logic, no GitHub/network. Run: `xcodebuild test -scheme NotesApp -destination 'platform=iOS Simulator,name=iPhone 17'` (or ⌘U in Xcode). Two small testability refactors enabled these: split `LinkMetadataService.fetch` into a pure `parse(html:url:)`, and moved `blockquote` into `Shared/ShareFormatting`.
 - [ ] Any cleanup or refactoring we can do in the codebase
 - [ ] Add AGENTS.md etc.
 - [ ] Make README proper.

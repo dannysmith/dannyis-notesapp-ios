@@ -20,9 +20,7 @@ enum LinkMetadataService {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     static func fetch(_ urlString: String) async -> LinkMetadata? {
-        guard let url = URL(string: urlString), let host = url.host else { return nil }
-        let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-
+        guard let url = URL(string: urlString), url.host != nil else { return nil }
         if let cached = await cache.get(urlString) { return cached }
 
         var request = URLRequest(url: url)
@@ -37,11 +35,7 @@ enum LinkMetadataService {
             guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1),
                   !html.isEmpty else { return nil }
 
-            let title = extractMeta(html, ["og:title", "twitter:title", "title", "<title>", "og:site_name"]) ?? domain
-            let description = extractMeta(html, ["og:description", "twitter:description", "description"])
-            let image = extractMeta(html, ["og:image", "twitter:image"]).flatMap { absoluteURL($0, relativeTo: url) }
-
-            let metadata = LinkMetadata(url: urlString, domain: domain, title: title, description: description, imageURL: image)
+            let metadata = parse(html: html, url: url)
             await cache.set(urlString, metadata)
             return metadata
         } catch {
@@ -50,6 +44,16 @@ enum LinkMetadataService {
     }
 
     // MARK: - Parsing
+
+    /// Pure extraction of metadata from HTML — no networking, so it's unit-testable.
+    static func parse(html: String, url: URL) -> LinkMetadata {
+        let host = url.host ?? ""
+        let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        let title = extractMeta(html, ["og:title", "twitter:title", "title", "<title>", "og:site_name"]) ?? domain
+        let description = extractMeta(html, ["og:description", "twitter:description", "description"])
+        let image = extractMeta(html, ["og:image", "twitter:image"]).flatMap { absoluteURL($0, relativeTo: url) }
+        return LinkMetadata(url: url.absoluteString, domain: domain, title: title, description: description, imageURL: image)
+    }
 
     /// Tries each name in order, matching `<meta property=…>`, `<meta name=…>`,
     /// content-first ordering, and the `<title>` tag — mirroring the site util.

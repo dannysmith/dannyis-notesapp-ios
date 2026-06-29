@@ -43,6 +43,9 @@ targets:
           - group.is.danny.notesapp
     dependencies:
       - target: ShareExtension
+    scheme:
+      testTargets:
+        - NotesAppTests
     preBuildScripts:
       - name: SwiftLint
         basedOnDependencyAnalysis: false
@@ -73,3 +76,17 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.is.danny.notesapp
+
+  NotesAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: NotesApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: is.danny.notesapp.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/NotesApp.app/NotesApp
+        BUNDLE_LOADER: $(TEST_HOST)
