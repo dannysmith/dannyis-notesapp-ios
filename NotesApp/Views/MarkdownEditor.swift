@@ -76,7 +76,7 @@ struct MarkdownEditor: UIViewRepresentable {
 
         // MARK: - Toolbar
 
-        func makeToolbar() -> UIToolbar {
+        func makeToolbar() -> UIView {
             let bar = UIToolbar()
             bar.sizeToFit()
             var items: [UIBarButtonItem] = [
@@ -94,7 +94,19 @@ struct MarkdownEditor: UIViewRepresentable {
             }
             items.append(UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard)))
             bar.items = items
-            return bar
+
+            // An inputAccessoryView sits flush against the top of the keyboard.
+            // Host the bar in a slightly taller, transparent container with the
+            // bar pinned to the top, so the gap at the bottom separates the
+            // buttons from the keyboard.
+            let barHeight = bar.frame.height
+            let gap: CGFloat = 8
+            let container = UIView(frame: CGRect(x: 0, y: 0, width: bar.frame.width, height: barHeight + gap))
+            container.backgroundColor = .clear
+            bar.frame = CGRect(x: 0, y: 0, width: bar.frame.width, height: barHeight)
+            bar.autoresizingMask = [.flexibleWidth]
+            container.addSubview(bar)
+            return container
         }
 
         @objc private func toggleExpand() {
