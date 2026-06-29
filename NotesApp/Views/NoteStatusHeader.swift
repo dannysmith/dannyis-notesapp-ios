@@ -1,33 +1,31 @@
 import SwiftUI
 
-/// Prominent status banner shown at the top of the editor: where this note
-/// currently lives (this device / draft on GitHub / published), and whether it
-/// has local edits not yet pushed.
+/// Compact status row at the top of the editor: an icon coloured by where the
+/// note lives, its filename, and — for notes already on GitHub — whether it has
+/// local edits not yet pushed. The state's name lives in the nav-bar title.
 struct NoteStatusHeader: View {
     let note: Note
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.title2)
                 .foregroundStyle(color)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(color)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if note.hasUnpushedChanges {
-                    Text("Local changes not pushed")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.orange)
-                }
+            Text(filename)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
+            if note.hasUnpushedChanges {
+                Text("Local changes")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        // A state-tinted capsule marks this as informational, not an input.
+        .background(color.opacity(0.12), in: Capsule())
         .accessibilityElement(children: .combine)
     }
 
@@ -49,22 +47,6 @@ struct NoteStatusHeader: View {
         case .localOnly: .secondary
         case .draft: .orange
         case .published: .green
-        }
-    }
-
-    private var title: String {
-        switch note.syncState {
-        case .localOnly: "Local draft"
-        case .draft: "Draft on GitHub"
-        case .published: "Published"
-        }
-    }
-
-    private var detail: String {
-        switch note.syncState {
-        case .localOnly: "Only on this device · \(filename)"
-        case .draft: "On \(AppConfig.branch) · \(filename)"
-        case .published: "On \(AppConfig.branch) · \(filename)"
         }
     }
 }

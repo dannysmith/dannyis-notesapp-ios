@@ -23,10 +23,16 @@ struct NoteEditorView: View {
         Form {
             Section {
                 NoteStatusHeader(note: note)
+                    // Not an input — drop the white cell background so it reads
+                    // as informational content on the grouped backdrop rather
+                    // than looking like another editable field.
+                    .listRowBackground(Color.clear)
             }
 
-            Section("Title") {
+            Section {
                 TextField("Title", text: $note.title, axis: .vertical)
+                    .font(.title3)
+                    .fontWeight(.bold)
             }
 
             Section("Body") {
@@ -111,7 +117,9 @@ struct NoteEditorView: View {
                 }
             }
         }
-        .navigationTitle(note.title.isEmpty ? "New Note" : note.title)
+        .listSectionSpacing(.compact)
+        .contentMargins(.top, 8, for: .scrollContent)
+        .navigationTitle(statusTitle)
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if isWorking {
@@ -180,6 +188,16 @@ struct NoteEditorView: View {
     }
 
     // MARK: - Actions
+
+    /// The nav-bar title reflects where the note lives, so the status header
+    /// below need only show the filename and any local-change indicator.
+    private var statusTitle: String {
+        switch note.syncState {
+        case .localOnly: "Local Draft"
+        case .draft: "GH Draft"
+        case .published: "Published Note"
+        }
+    }
 
     /// The two primary buttons shown for the note's current state.
     private var primaryActions: [EditorAction] {
