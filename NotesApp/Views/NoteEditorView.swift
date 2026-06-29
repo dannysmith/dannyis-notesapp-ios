@@ -11,6 +11,7 @@ struct NoteEditorView: View {
     @State private var errorMessage: String?
     @State private var pendingAction: EditorAction?
     @State private var showConflict = false
+    @State private var bodyExpanded = false
     /// The slug value this view last auto-generated. While the current slug
     /// matches it, we keep syncing from the title; once the user edits or
     /// clears the slug, it diverges and we stop.
@@ -29,7 +30,7 @@ struct NoteEditorView: View {
             }
 
             Section("Body") {
-                MarkdownEditor(text: $note.body)
+                MarkdownEditor(text: $note.body, onToggleExpand: { bodyExpanded = true })
                     .frame(minHeight: 220)
             }
 
@@ -123,6 +124,25 @@ struct NoteEditorView: View {
         .onDisappear {
             // Edits auto-persist, but force a save when leaving for safety.
             try? modelContext.save()
+        }
+        .fullScreenCover(isPresented: $bodyExpanded) {
+            NavigationStack {
+                MarkdownEditor(
+                    text: $note.body,
+                    isExpanded: true,
+                    autofocus: true,
+                    onToggleExpand: { bodyExpanded = false }
+                )
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle("Body")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { bodyExpanded = false }
+                    }
+                }
+            }
         }
         .confirmationDialog(
             confirmationTitle,
@@ -228,10 +248,12 @@ struct NoteEditorView: View {
         note.customSlug = generated.isEmpty ? nil : generated
         lastAutoSlug = generated
     }
+}
 
-    // MARK: - Networking
+// MARK: - Networking
 
-    private func push(asDraft: Bool) {
+private extension NoteEditorView {
+    func push(asDraft: Bool) {
         isWorking = true
         Task {
             defer { isWorking = false }

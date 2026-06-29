@@ -8,6 +8,13 @@ import UIKit
 /// accessory toolbar inserts markdown syntax around the current selection.
 struct MarkdownEditor: UIViewRepresentable {
     @Binding var text: String
+    /// Fills its container and scrolls internally (full-screen mode), rather
+    /// than growing to fit (inline-in-a-Form mode).
+    var isExpanded = false
+    /// Becomes first responder when it appears (used by the full-screen cover).
+    var autofocus = false
+    /// When set, the toolbar shows an expand/collapse button that calls this.
+    var onToggleExpand: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -24,9 +31,9 @@ struct MarkdownEditor: UIViewRepresentable {
         // Source text: keep punctuation literal and predictable.
         textView.smartQuotesType = .no
         textView.smartDashesType = .no
-        // Grow to fit content inside the surrounding SwiftUI Form, and wrap to
-        // the available width instead of demanding the full single-line width.
-        textView.isScrollEnabled = false
+        // Inline: grow to fit (no scroll) and wrap to the available width rather
+        // than demanding the full single-line width. Expanded: fill and scroll.
+        textView.isScrollEnabled = isExpanded
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textView.inputAccessoryView = context.coordinator.makeToolbar()
         textView.text = text
@@ -36,6 +43,7 @@ struct MarkdownEditor: UIViewRepresentable {
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
+        context.coordinator.parent = self
         context.coordinator.textView = textView
         // Only overwrite when the external value genuinely diverged, so we don't
         // stomp the cursor on every keystroke.
@@ -43,12 +51,17 @@ struct MarkdownEditor: UIViewRepresentable {
             textView.text = text
             MarkdownSyntaxHighlighter.highlight(textView)
         }
+        if autofocus, !context.coordinator.didAutofocus {
+            context.coordinator.didAutofocus = true
+            textView.becomeFirstResponder()
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate {
-        private let parent: MarkdownEditor
+        var parent: MarkdownEditor
         weak var textView: UITextView?
+        var didAutofocus = false
 
         init(_ parent: MarkdownEditor) {
             self.parent = parent
@@ -66,15 +79,26 @@ struct MarkdownEditor: UIViewRepresentable {
         func makeToolbar() -> UIToolbar {
             let bar = UIToolbar()
             bar.sizeToFit()
-            bar.items = [
+            var items: [UIBarButtonItem] = [
                 button("bold", #selector(applyBold), "Bold"),
                 button("italic", #selector(applyItalic), "Italic"),
                 button("link", #selector(applyLink), "Link"),
                 button("number", #selector(applyHeading), "Heading"),
-                UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-                UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard))
+                UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
             ]
+            if parent.onToggleExpand != nil {
+                let symbol = parent.isExpanded
+                    ? "arrow.down.right.and.arrow.up.left"
+                    : "arrow.up.left.and.arrow.down.right"
+                items.append(button(symbol, #selector(toggleExpand), parent.isExpanded ? "Collapse" : "Expand"))
+            }
+            items.append(UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard)))
+            bar.items = items
             return bar
+        }
+
+        @objc private func toggleExpand() {
+            parent.onToggleExpand?()
         }
 
         private func button(_ symbol: String, _ action: Selector, _ label: String) -> UIBarButtonItem {
