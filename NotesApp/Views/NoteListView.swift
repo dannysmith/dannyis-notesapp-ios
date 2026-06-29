@@ -96,13 +96,31 @@ struct NoteListView: View {
         }
     }
 
-    /// Turns any items the Share Extension queued into local-draft notes.
+    /// Turns any items the Share Extension queued into local-draft notes, then
+    /// fills in each title from the source URL's metadata where possible.
     private func importSharedDrafts() {
         let payloads = ShareInbox.drain()
         guard !payloads.isEmpty else { return }
+        var created: [Note] = []
         for payload in payloads {
-            modelContext.insert(Note(body: payload.body, sourceURL: payload.sourceURL))
+            let note = Note(body: payload.body, sourceURL: payload.sourceURL)
+            modelContext.insert(note)
+            created.append(note)
         }
+        try? modelContext.save()
+
+        for note in created where note.title.isEmpty && (note.sourceURL?.isEmpty == false) {
+            Task { await fillTitleFromMetadata(note) }
+        }
+    }
+
+    private func fillTitleFromMetadata(_ note: Note) async {
+        guard let url = note.sourceURL, let metadata = await LinkMetadataService.fetch(url) else { return }
+        // Only use a real page title, not the bare-domain fallback, and don't
+        // clobber anything the user has since typed.
+        guard note.title.isEmpty, metadata.title != metadata.domain else { return }
+        note.title = metadata.title
+        note.updatedAt = Date()
         try? modelContext.save()
     }
 

@@ -146,6 +146,7 @@ It'd be awesome if when a sourceURL is present we can show a nice preview of it 
 - [x] Grab URL + selected text from share source → prefill `sourceURL` + body. (The original motivation.) Safari typically provides both the page URL and any selection, so you get `sourceURL` + a blockquoted body in one go.
 - [x] Quick compose sheet (`ShareComposeView`): shows the captured URL + an editable body, Save Draft / Cancel. Dismisses back to the host app; the draft is waiting in the app.
 - [x] text only → blockquote (`> ` per line); URL only → `sourceURL` with empty body.
+- [x] Auto-fill the draft **title** from the source URL's metadata on import (reuses `LinkMetadataService` — the OG title *is* the page title), only when a real title is found (not the bare domain). Safari doesn't reliably hand the page title to an extension without a JavaScript preprocessing file, so we derive it app-side instead.
 - [ ] ~~image → upload to assets dir~~ — deliberately skipped (too much complexity for now).
 
 **Required Xcode setup (once):** select your Team on the **ShareExtension** target, and confirm the **App Groups** capability (`group.is.danny.notesapp`) on *both* the app and the extension under Signing & Capabilities (automatic signing creates the group). Files: `ShareExtension/` (principal `ShareViewController`, `ShareComposeView`, `Info.plist`, entitlements) + `Shared/SharedInbox.swift`.
