@@ -148,10 +148,12 @@ struct NoteEditorView: View {
                 }
             }
         }
-        .confirmationDialog(
+        // A centred alert rather than a confirmationDialog: the dialog anchors to
+        // this modifier's view (the Form root), so it renders as a popover pinned
+        // to the top instead of near the tapped button. An alert has no anchor.
+        .alert(
             confirmationTitle,
             isPresented: confirmationPresented,
-            titleVisibility: .visible,
             presenting: pendingAction
         ) { action in
             if let confirm = style(for: action).confirm {
