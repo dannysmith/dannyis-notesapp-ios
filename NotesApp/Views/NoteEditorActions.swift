@@ -17,9 +17,15 @@ struct ActionConfirm {
 }
 
 /// Presentation + confirmation copy for a button.
+///
+/// Colour model: an action whose `confirm` is destructive renders in the system
+/// red destructive role (icon + text red). Every other action colours its icon
+/// and text with `tint`, falling back to the accent colour when `tint` is nil.
 struct ActionStyle {
     let label: String
     let icon: String
+    /// Icon + text colour for non-destructive actions; nil means accent (blue).
+    /// Ignored for destructive actions, which always render red.
     var tint: Color?
     var confirm: ActionConfirm?
 }
@@ -61,7 +67,6 @@ func actionStyle(for action: EditorAction, syncState: SyncState) -> ActionStyle 
         ActionStyle(
             label: "Revert to draft",
             icon: "arrow.uturn.backward",
-            tint: .orange,
             confirm: ActionConfirm(
                 title: "Revert to draft?",
                 message: "This removes the note from your live site on the next deploy.",

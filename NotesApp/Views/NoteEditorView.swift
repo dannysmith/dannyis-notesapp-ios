@@ -95,12 +95,8 @@ struct NoteEditorView: View {
 
             if note.hasUnpushedChanges {
                 Section {
-                    Button {
-                        trigger(.reloadFromGitHub)
-                    } label: {
-                        Label("Reload from GitHub", systemImage: "arrow.down.circle")
-                    }
-                    .disabled(isWorking)
+                    actionButton(.reloadFromGitHub)
+                        .disabled(isWorking)
                 } footer: {
                     Text("Replaces your local edits with the current version on GitHub.")
                 }
@@ -108,12 +104,8 @@ struct NoteEditorView: View {
 
             if note.remotePath != nil {
                 Section {
-                    Button(role: .destructive) {
-                        trigger(.deleteRemote)
-                    } label: {
-                        Label("Delete from GitHub", systemImage: "trash")
-                    }
-                    .disabled(isWorking)
+                    actionButton(.deleteRemote)
+                        .disabled(isWorking)
                 }
             }
         }
@@ -211,12 +203,16 @@ struct NoteEditorView: View {
     @ViewBuilder
     private func actionButton(_ action: EditorAction) -> some View {
         let style = style(for: action)
-        Button {
+        let isDestructive = style.confirm?.destructive == true
+        Button(role: isDestructive ? .destructive : nil) {
             trigger(action)
         } label: {
+            // Colour the whole Label (icon + text) together: `.tint` alone leaves
+            // the icon at the accent colour inside a Form. Destructive actions use
+            // the red role; everything else uses its tint, defaulting to accent.
             Label(style.label, systemImage: style.icon)
+                .foregroundStyle(isDestructive ? Color.red : (style.tint ?? .accentColor))
         }
-        .tint(style.tint)
     }
 
     /// Either prompt for confirmation or run the action immediately.
