@@ -47,20 +47,9 @@ struct NoteListView: View {
                     }
                 }
             }
-            // Render the title ourselves, pinned just under the status bar, and
-            // hide the system navigation bar — otherwise its now-empty top row
-            // (all actions moved to the bottom bar) leaves a band of dead space
-            // above the title. navigationTitle stays for the editor's back label.
+            // Native large title: it provides the standard scroll-edge blur as
+            // content (and the status bar) passes under it, on every iOS version.
             .navigationTitle("danny.is/notes")
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .top) {
-                Text("danny.is/notes")
-                    .font(.largeTitle.weight(.bold))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-            }
             .toolbar {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button {
