@@ -81,6 +81,20 @@ final class Note {
         syncedContentHash = currentContentHash
     }
 
+    /// Populates the editable fields from parsed frontmatter, used when
+    /// importing or reloading a note from the repo. Leaves `pubDate` untouched
+    /// when the frontmatter has none.
+    func apply(_ parsed: ParsedFrontmatter) {
+        title = parsed.title
+        body = parsed.body
+        sourceURL = parsed.sourceURL
+        customSlug = parsed.customSlug
+        tags = parsed.tags
+        noteDescription = parsed.description
+        draftFlag = parsed.draft
+        if let pubDate = parsed.pubDate { self.pubDate = pubDate }
+    }
+
     /// Slug used for the filename: custom slug if set, otherwise derived from title.
     var effectiveSlug: String {
         if let customSlug, !customSlug.isEmpty { return customSlug }

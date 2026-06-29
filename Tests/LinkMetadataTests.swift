@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesApp
+import Testing
 
 struct LinkMetadataTests {
     private let url = URL(string: "https://www.example.com/page")!

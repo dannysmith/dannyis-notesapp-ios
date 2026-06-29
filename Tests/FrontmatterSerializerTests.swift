@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesApp
+import Testing
 
 struct FrontmatterSerializerTests {
     // MARK: - Slugs

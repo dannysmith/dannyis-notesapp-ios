@@ -124,9 +124,9 @@ struct NoteListView: View {
         try? modelContext.save()
     }
 
-    /// Fetches every remote note, imports any not already tracked locally, and
-    /// excludes notes with `styleguide: true` entirely — skipping new ones and
-    /// removing any that were imported before this exclusion existed.
+    /// Fetches every remote note and imports any not already tracked locally.
+    /// Notes with `styleguide: true` are excluded entirely: never imported, and
+    /// any local copy is deleted.
     private func pull() {
         isPulling = true
         let client = client
@@ -152,16 +152,8 @@ struct NoteListView: View {
                     // Keep any local copy (and its unpushed edits) as-is.
                     if localByPath[entry.path] != nil { continue }
 
-                    let note = Note(
-                        title: parsed.title,
-                        body: parsed.body,
-                        sourceURL: parsed.sourceURL,
-                        customSlug: parsed.customSlug,
-                        tags: parsed.tags,
-                        noteDescription: parsed.description,
-                        pubDate: parsed.pubDate ?? Date(),
-                        draftFlag: parsed.draft
-                    )
+                    let note = Note()
+                    note.apply(parsed)
                     note.remotePath = entry.path
                     note.remoteSha = entry.sha
                     note.markSynced()

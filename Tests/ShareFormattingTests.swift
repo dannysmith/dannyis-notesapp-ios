@@ -1,5 +1,5 @@
-import Testing
 @testable import NotesApp
+import Testing
 
 struct ShareFormattingTests {
     @Test func blockquotesSingleLine() {

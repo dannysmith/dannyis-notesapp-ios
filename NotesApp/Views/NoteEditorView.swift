@@ -283,7 +283,7 @@ private extension NoteEditorView {
                 // Remote moved since we last synced — let the user choose.
                 showConflict = true
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                report(error)
             }
         }
     }
@@ -310,7 +310,7 @@ private extension NoteEditorView {
                 try? modelContext.save()
                 dismiss()
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                report(error)
             }
         }
     }
@@ -323,15 +323,7 @@ private extension NoteEditorView {
             defer { isWorking = false }
             do {
                 let (text, sha) = try await client.fetchFile(path: path)
-                let parsed = FrontmatterSerializer.parse(text)
-                note.title = parsed.title
-                note.body = parsed.body
-                note.sourceURL = parsed.sourceURL
-                note.customSlug = parsed.customSlug
-                note.tags = parsed.tags
-                note.noteDescription = parsed.description
-                if let pubDate = parsed.pubDate { note.pubDate = pubDate }
-                note.draftFlag = parsed.draft
+                note.apply(FrontmatterSerializer.parse(text))
                 note.remoteSha = sha
                 note.markSynced()
                 note.updatedAt = Date()
@@ -339,7 +331,7 @@ private extension NoteEditorView {
                 lastAutoSlug = note.customSlug ?? ""
                 try? modelContext.save()
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                report(error)
             }
         }
     }
@@ -355,8 +347,13 @@ private extension NoteEditorView {
                 try? modelContext.save()
                 dismiss()
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                report(error)
             }
         }
+    }
+
+    /// Surfaces an error in the "Something went wrong" alert.
+    func report(_ error: Error) {
+        errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
