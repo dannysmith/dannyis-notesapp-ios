@@ -72,7 +72,10 @@ struct SettingsView: View {
     }
 
     private func save() {
-        KeychainStore.save(token)
+        guard KeychainStore.save(token) else {
+            status = .failed("Couldn't save the token to the Keychain.")
+            return
+        }
         isValidating = true
         status = .idle
         Task {

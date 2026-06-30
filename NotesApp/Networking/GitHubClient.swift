@@ -22,14 +22,14 @@ struct GitHubClient {
 
     /// Lists `.md`/`.mdx` files in the notes directory.
     func listNotes() async throws -> [GHContentEntry] {
-        let path = "/repos/\(AppConfig.repoSlug)/contents/\(AppConfig.notesDir)?ref=\(AppConfig.branch)"
+        let path = "/repos/\(AppConfig.repoSlug)/contents/\(encode(AppConfig.notesDir))?ref=\(AppConfig.branch)"
         let entries = try await get(path, as: [GHContentEntry].self)
         return entries.filter { $0.type == "file" && ($0.name.hasSuffix(".md") || $0.name.hasSuffix(".mdx")) }
     }
 
     /// Fetches a single file's decoded text and current SHA.
     func fetchFile(path: String) async throws -> (text: String, sha: String) {
-        let endpoint = "/repos/\(AppConfig.repoSlug)/contents/\(path)?ref=\(AppConfig.branch)"
+        let endpoint = "/repos/\(AppConfig.repoSlug)/contents/\(encode(path))?ref=\(AppConfig.branch)"
         let file = try await get(endpoint, as: GHFile.self)
         guard let text = file.decodedText else {
             throw GitHubError.decoding("file content was not valid UTF-8")
@@ -52,7 +52,7 @@ struct GitHubClient {
             branch: AppConfig.branch,
             sha: sha
         )
-        return try await send("PUT", "/repos/\(AppConfig.repoSlug)/contents/\(path)", body: body, as: GHWriteResponse.self)
+        return try await send("PUT", "/repos/\(AppConfig.repoSlug)/contents/\(encode(path))", body: body, as: GHWriteResponse.self)
     }
 
     /// Deletes a file as a single commit.
@@ -64,10 +64,17 @@ struct GitHubClient {
             let branch: String
         }
         let body = Body(message: message, sha: sha, branch: AppConfig.branch)
-        return try await send("DELETE", "/repos/\(AppConfig.repoSlug)/contents/\(path)", body: body, as: GHWriteResponse.self)
+        return try await send("DELETE", "/repos/\(AppConfig.repoSlug)/contents/\(encode(path))", body: body, as: GHWriteResponse.self)
     }
 
     // MARK: - Request plumbing
+
+    /// Percent-encodes a repo file path for use in a URL, preserving the `/`
+    /// separators but escaping spaces and other characters a custom slug may
+    /// contain. Without this, a path with a space yields a nil `URL`.
+    private func encode(_ path: String) -> String {
+        path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+    }
 
     private func get<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
         let request = try makeRequest("GET", path)

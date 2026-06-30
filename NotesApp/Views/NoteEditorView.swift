@@ -315,9 +315,7 @@ private extension NoteEditorView {
                 )
                 note.remotePath = response.content?.path ?? path
                 note.remoteSha = response.content?.sha
-                note.markSynced()
-                note.updatedAt = Date()
-                try? modelContext.save()
+                recordSynced()
                 dismiss()
             } catch let GitHubError.http(status, _) where status == 409 {
                 // Remote moved since we last synced — let the user choose.
@@ -345,9 +343,7 @@ private extension NoteEditorView {
                     sha: latestSha
                 )
                 note.remoteSha = response.content?.sha
-                note.markSynced()
-                note.updatedAt = Date()
-                try? modelContext.save()
+                recordSynced()
                 dismiss()
             } catch {
                 report(error)
@@ -365,11 +361,9 @@ private extension NoteEditorView {
                 let (text, sha) = try await client.fetchFile(path: path)
                 note.apply(FrontmatterSerializer.parse(text))
                 note.remoteSha = sha
-                note.markSynced()
-                note.updatedAt = Date()
+                recordSynced()
                 tagsText = note.tags.joined(separator: ", ")
                 lastAutoSlug = note.customSlug ?? ""
-                try? modelContext.save()
             } catch {
                 report(error)
             }
@@ -390,6 +384,13 @@ private extension NoteEditorView {
                 report(error)
             }
         }
+    }
+
+    /// Persists the note and records its content as the new synced baseline.
+    func recordSynced() {
+        note.markSynced()
+        note.updatedAt = Date()
+        try? modelContext.save()
     }
 
     /// Surfaces an error in the "Something went wrong" alert.

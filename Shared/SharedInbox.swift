@@ -23,13 +23,20 @@ enum ShareInbox {
             .appendingPathComponent("ShareInbox", isDirectory: true)
     }
 
-    /// Queues a shared item (called from the extension).
-    static func write(_ payload: SharePayload) {
-        guard let directory else { return }
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    /// Queues a shared item (called from the extension). Returns false if the
+    /// payload couldn't be written, so the caller can report failure rather
+    /// than dismiss the share sheet as if it had saved.
+    @discardableResult
+    static func write(_ payload: SharePayload) -> Bool {
+        guard let directory else { return false }
         let file = directory.appendingPathComponent("\(UUID().uuidString).json")
-        if let data = try? JSONEncoder().encode(payload) {
-            try? data.write(to: file, options: .atomic)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(payload)
+            try data.write(to: file, options: .atomic)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -42,9 +49,12 @@ enum ShareInbox {
         let decoder = JSONDecoder()
         var payloads: [SharePayload] = []
         for file in files where file.pathExtension == "json" {
-            if let data = try? Data(contentsOf: file), let payload = try? decoder.decode(SharePayload.self, from: data) {
-                payloads.append(payload)
-            }
+            // Only delete a file once we've successfully read it, so a transient
+            // read/decode failure leaves the payload to retry next time rather
+            // than dropping it.
+            guard let data = try? Data(contentsOf: file),
+                  let payload = try? decoder.decode(SharePayload.self, from: data) else { continue }
+            payloads.append(payload)
             try? FileManager.default.removeItem(at: file)
         }
         return payloads.sorted { $0.createdAt < $1.createdAt }

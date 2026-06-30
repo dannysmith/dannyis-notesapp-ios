@@ -17,7 +17,10 @@ enum KeychainStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            // Device-only: the PAT shouldn't sync to iCloud Keychain or land in
+            // backups. Still readable after first unlock so it works in the
+            // background.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }

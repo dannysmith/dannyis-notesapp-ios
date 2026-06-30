@@ -7,19 +7,17 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
-        Task { await loadAndPresent() }
-    }
-
-    private func loadAndPresent() async {
-        let (sourceURL, text) = await extractSharedContent()
-        let body = text.map(ShareFormatting.blockquote) ?? ""
-        let initial = SharePayload(sourceURL: sourceURL, body: body, createdAt: Date())
 
         let composeView = ShareComposeView(
-            initial: initial,
+            extract: { [weak self] in
+                guard let self else { return (nil, "") }
+                let (sourceURL, text) = await extractSharedContent()
+                return (sourceURL, text.map(ShareFormatting.blockquote) ?? "")
+            },
             onSave: { [weak self] payload in
-                ShareInbox.write(payload)
-                self?.complete()
+                // A failed write means the App Group is misconfigured and there's
+                // nothing to recover, so cancel rather than claim a false success.
+                self?.finish(saved: ShareInbox.write(payload))
             },
             onCancel: { [weak self] in self?.cancel() }
         )
@@ -75,8 +73,14 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Completion
 
-    private func complete() {
-        extensionContext?.completeRequest(returningItems: nil)
+    /// Completes the request when the payload was queued, or cancels when it
+    /// wasn't, so the share sheet never dismisses as a success on a failed save.
+    private func finish(saved: Bool) {
+        if saved {
+            extensionContext?.completeRequest(returningItems: nil)
+        } else {
+            cancel()
+        }
     }
 
     private func cancel() {

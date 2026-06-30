@@ -201,8 +201,11 @@ struct MarkdownEditor: UIViewRepresentable {
                 textView.replace(textRange, withText: newLine)
             }
 
+            // Offset the *original* caret by the length change. Reading
+            // `selectedRange` here instead would compound the shift, since
+            // `replace` has already moved the selection to the line's new end.
             let delta = (newLine as NSString).length - lineRange.length
-            let newCaret = max(lineRange.location, textView.selectedRange.location + delta)
+            let newCaret = max(lineRange.location, caret + delta)
             textView.selectedRange = NSRange(location: min(newCaret, (textView.text as NSString).length), length: 0)
             parent.text = textView.text
         }

@@ -17,10 +17,14 @@ struct GHFile: Codable {
     let sha: String
     let encoding: String
 
-    /// Decoded UTF-8 text, or nil if not base64/utf8 decodable.
+    /// Decoded UTF-8 text, or nil if the content isn't base64-encoded UTF-8.
+    /// Files over ~1 MB come back as `encoding: "none"` with empty content
+    /// (fetch them via the Blobs/raw API instead); guarding the encoding keeps
+    /// that case from silently decoding to an empty string.
     var decodedText: String? {
-        let stripped = content.replacingOccurrences(of: "\n", with: "")
-        guard let data = Data(base64Encoded: stripped) else { return nil }
+        guard encoding == "base64" else { return nil }
+        // GitHub wraps the base64 payload at 60 columns; ignore the newlines.
+        guard let data = Data(base64Encoded: content, options: .ignoreUnknownCharacters) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }
