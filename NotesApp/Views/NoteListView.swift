@@ -4,7 +4,11 @@ import SwiftUI
 struct NoteListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @Query(sort: \Note.updatedAt, order: .reverse) private var notes: [Note]
+    /// Newest publish date first; ties broken by most-recently-edited.
+    @Query(sort: [
+        SortDescriptor(\Note.pubDate, order: .reverse),
+        SortDescriptor(\Note.updatedAt, order: .reverse)
+    ]) private var notes: [Note]
 
     @State private var showingSettings = false
     @State private var newNote: Note?

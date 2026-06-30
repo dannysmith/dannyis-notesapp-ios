@@ -30,20 +30,23 @@ struct NoteEditorView: View {
             }
 
             Section {
-                TextField("Title", text: $note.title, axis: .vertical)
+                TextField("Title", text: edited(\.title), axis: .vertical)
                     .font(.title3)
                     .fontWeight(.bold)
             }
 
             Section("Body") {
-                MarkdownEditor(text: $note.body, onToggleExpand: { bodyExpanded = true })
+                MarkdownEditor(text: edited(\.body), onToggleExpand: { bodyExpanded = true })
                     .frame(minHeight: 220)
             }
 
             Section("Metadata") {
                 TextField("Source URL", text: Binding(
                     get: { note.sourceURL ?? "" },
-                    set: { note.sourceURL = $0.isEmpty ? nil : $0 }
+                    set: {
+                        note.sourceURL = $0.isEmpty ? nil : $0
+                        note.updatedAt = Date()
+                    }
                 ))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -56,7 +59,10 @@ struct NoteEditorView: View {
                 HStack {
                     TextField("Custom slug (optional)", text: Binding(
                         get: { note.customSlug ?? "" },
-                        set: { note.customSlug = $0.isEmpty ? nil : $0 }
+                        set: {
+                            note.customSlug = $0.isEmpty ? nil : $0
+                            note.updatedAt = Date()
+                        }
                     ))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -64,6 +70,7 @@ struct NoteEditorView: View {
                     if !(note.customSlug ?? "").isEmpty {
                         Button {
                             note.customSlug = nil
+                            note.updatedAt = Date()
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.tertiary)
@@ -77,13 +84,17 @@ struct NoteEditorView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .onChange(of: tagsText) { _, newValue in
-                        note.tags = newValue
+                        let newTags = newValue
                             .split(separator: ",")
                             .map { $0.trimmingCharacters(in: .whitespaces) }
                             .filter { !$0.isEmpty }
+                        // Syncing the field from the note (on appear / reload) isn't an edit.
+                        guard newTags != note.tags else { return }
+                        note.tags = newTags
+                        note.updatedAt = Date()
                     }
 
-                DatePicker("Publish date", selection: $note.pubDate, displayedComponents: .date)
+                DatePicker("Publish date", selection: edited(\.pubDate), displayedComponents: .date)
             }
 
             Section {
@@ -132,7 +143,7 @@ struct NoteEditorView: View {
         .fullScreenCover(isPresented: $bodyExpanded) {
             NavigationStack {
                 MarkdownEditor(
-                    text: $note.body,
+                    text: edited(\.body),
                     isExpanded: true,
                     autofocus: true,
                     onToggleExpand: { bodyExpanded = false }
@@ -179,6 +190,19 @@ struct NoteEditorView: View {
                 "“Keep my version” overwrites GitHub with your local copy; " +
                 "“Use GitHub version” discards your local edits.")
         }
+    }
+
+    /// A binding to a note field that stamps `updatedAt` on every user change, so
+    /// the list's publish-date-then-recency order tracks real edits. Reload/pull
+    /// set fields directly, bypassing this, and stamp `updatedAt` themselves.
+    private func edited<Value>(_ keyPath: ReferenceWritableKeyPath<Note, Value>) -> Binding<Value> {
+        Binding(
+            get: { note[keyPath: keyPath] },
+            set: {
+                note[keyPath: keyPath] = $0
+                note.updatedAt = Date()
+            }
+        )
     }
 
     // MARK: - Actions
