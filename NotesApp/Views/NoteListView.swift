@@ -63,8 +63,7 @@ struct NoteListView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
-                    // The primary action: a filled accent-colour button, the
-                    // OS-standard prominent style for primary actions.
+                    // Prominent (filled) styling marks this as the screen's primary action.
                     .buttonStyle(.borderedProminent)
                     .tint(.accentColor)
 
